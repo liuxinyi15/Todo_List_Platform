@@ -3,233 +3,347 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Persistent Team Backlog & Archive</title>
+    <title>TO DO CREATOR PRO - Full Control</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        [v-cloak] { display: none; }
+        .table-cell-custom {
+            max-width: 300px;
+            word-wrap: break-word;
+            white-space: normal;
+        }
+        .editable-cell:focus { background: #f8fafc; outline: 2px solid #6366f1; border-radius: 4px; padding: 2px; }
+    </style>
 </head>
-<body class="bg-slate-50 min-h-screen text-slate-800">
-    <div id="app" class="max-w-6xl mx-auto p-6">
+<body class="bg-slate-50 min-h-screen text-slate-800 font-sans">
+    <div id="app" v-cloak class="max-w-[98%] mx-auto p-4 md:p-8">
         
         <header class="flex flex-col md:flex-row md:justify-between md:items-center mb-8 gap-4">
             <div>
-                <h1 class="text-3xl font-black tracking-tight text-indigo-900">TEAM WORKSPACE</h1>
-                <p class="text-slate-500 font-medium italic">Data is automatically saved to your browser (Local Storage).</p>
+                <h1 class="text-3xl font-black tracking-tight text-indigo-900 leading-none">TO DO CREATOR PRO</h1>
+                <p class="text-slate-500 font-medium mt-2 text-sm italic">Full control over your project tasks.</p>
             </div>
-            <button @click="createNewBoard" class="bg-indigo-600 text-white px-6 py-2.5 rounded-xl hover:bg-indigo-700 font-bold transition shadow-lg shadow-indigo-200">
-                + New Board
-            </button>
+            <div class="flex gap-3">
+                <button @click="exportToCSV" class="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700 font-bold transition text-sm flex items-center gap-2 shadow-sm">
+                    Export CSV
+                </button>
+                <button @click="createNewBoard" class="bg-indigo-600 text-white px-5 py-2.5 rounded-xl hover:bg-indigo-700 font-bold transition shadow-lg text-sm">
+                    + New Board
+                </button>
+            </div>
         </header>
 
         <nav class="flex gap-2 mb-8 overflow-x-auto border-b border-slate-200">
-            <button v-for="(board, index) in boards" :key="board.id" 
-                @click="activeBoardIndex = index"
-                :class="activeBoardIndex === index ? 'border-b-4 border-indigo-500 text-indigo-600 bg-white' : 'text-slate-400 hover:text-slate-600'"
-                class="px-6 py-3 font-bold transition whitespace-nowrap rounded-t-lg">
-                {{ board.name }}
-            </button>
+            <div v-for="(board, index) in boards" :key="board.id" class="relative group flex items-center">
+                <input v-if="editingBoardIdx === index" v-model="board.name" @blur="editingBoardIdx = null" @keyup.enter="editingBoardIdx = null" class="px-4 py-2 border-b-4 border-indigo-500 outline-none font-bold text-indigo-600 bg-transparent min-w-[120px]" auto-focus>
+                <button v-else @click="activeBoardIndex = index" @dblclick="editingBoardIdx = index" :class="activeBoardIndex === index ? 'border-b-4 border-indigo-500 text-indigo-600 bg-white' : 'text-slate-400 hover:text-slate-600'" class="px-6 py-3 font-bold transition whitespace-nowrap rounded-t-lg text-sm">
+                    {{ board.name }}
+                </button>
+                <button v-if="boards.length > 1" @click="deleteBoard(index)" class="ml-1 text-slate-300 hover:text-red-500 p-1">×</button>
+            </div>
         </nav>
 
         <div v-if="currentBoard" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            
-            <div class="lg:col-span-3">
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 sticky top-6">
-                    <h3 class="font-bold text-slate-400 uppercase text-xs tracking-widest mb-4">Create Task</h3>
+            <div class="lg:col-span-3 space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-4">Add Task</h3>
                     <div class="space-y-4">
-                        <input v-model="newTask.title" @keyup.enter="addTask" placeholder="Task title..." class="w-full border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none transition text-sm">
-                        <select v-model="newTask.priority" class="w-full border border-slate-200 p-3 rounded-xl appearance-none bg-white text-sm">
-                            <option value="3">High Priority</option>
-                            <option value="2">Medium Priority</option>
-                            <option value="1">Low Priority</option>
-                        </select>
-                        <button @click="addTask" class="w-full bg-slate-800 text-white py-3 rounded-xl font-bold hover:bg-black transition">Add to Active</button>
+                        <div v-for="header in currentBoard.headers" :key="header">
+                            <label class="block text-[10px] font-bold text-slate-500 mb-1 uppercase">{{ header }}</label>
+                            <select v-if="isPriorityField(header)" v-model="newTaskData[header]" 
+                                    class="w-full border border-slate-200 p-2.5 rounded-xl text-sm bg-slate-50 focus:ring-2 focus:ring-indigo-400 outline-none transition appearance-none">
+                                <option value="High">3 - High</option>
+                                <option value="Medium">2 - Medium</option>
+                                <option value="Low">1 - Low</option>
+                            </select>
+                            <input v-else v-model="newTaskData[header]" :placeholder="'Enter ' + header" 
+                                   class="w-full border border-slate-200 p-2.5 rounded-xl outline-none text-sm bg-slate-50 focus:ring-2 focus:ring-indigo-400 transition">
+                        </div>
+                        <button @click="addTask" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-black transition text-sm shadow-md">Add Task</button>
                     </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-4">Import Data</h3>
+                    <label class="block w-full border-2 border-dashed border-slate-200 p-6 rounded-xl text-center cursor-pointer hover:border-indigo-400 transition">
+                        <span class="text-xs text-indigo-600 font-bold block mb-1 underline text-sm">Choose CSV</span>
+                        <input type="file" @change="handleFileUpload" accept=".csv" class="hidden">
+                    </label>
                 </div>
             </div>
 
             <div class="lg:col-span-9 space-y-10">
                 
                 <section>
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-bold flex items-center gap-2">
-                            Active Tasks 
-                            <span class="bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-md text-sm">{{ activeTasks.length }}</span>
-                        </h2>
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                        <div class="flex items-center gap-4">
+                            <h2 class="text-xl font-bold text-indigo-900">Active Tasks</h2>
+                            <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-sm">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase">Sort By:</span>
+                                <select v-model="currentBoard.sortBy" class="font-bold text-indigo-600 bg-transparent outline-none cursor-pointer">
+                                    <option v-for="h in currentBoard.headers" :key="h" :value="h">{{ h }}</option>
+                                </select>
+                                <button @click="currentBoard.sortOrder = (currentBoard.sortOrder === 'desc' ? 'asc' : 'desc')" class="text-indigo-600 hover:bg-indigo-50 p-1 rounded transition">
+                                    <svg v-if="currentBoard.sortOrder === 'desc'" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7" /></svg>
+                                    <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 15l7-7 7 7" /></svg>
+                                </button>
+                            </div>
+                        </div>
                         <div v-show="selectedActiveIds.length > 0" class="flex gap-2">
-                            <button @click="batchArchive" class="text-xs bg-emerald-50 text-emerald-600 border border-emerald-200 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-100">Batch Archive</button>
-                            <button @click="batchDelete('active')" class="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100">Batch Delete</button>
+                            <button @click="batchArchive" class="text-xs bg-emerald-50 text-emerald-600 border border-emerald-200 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-100 transition">Archive Selected</button>
+                            <button @click="batchDelete('active')" class="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 transition text-[10px]">Delete Selected</button>
                         </div>
                     </div>
 
-                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                        <table class="w-full text-left">
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
                             <thead class="bg-slate-50 border-b border-slate-100 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
                                 <tr>
-                                    <th class="p-4 w-10 text-center"><input type="checkbox" v-model="allActiveSelected" @change="toggleSelect('active')"></th>
-                                    <th class="p-4">Task Details</th>
-                                    <th class="p-4">Priority</th>
-                                    <th class="p-4 text-right">Actions</th>
+                                    <th class="p-4 w-12 text-center"><input type="checkbox" v-model="allActiveSelected" @change="toggleSelect('active')" class="w-4 h-4 rounded"></th>
+                                    <th v-for="header in currentBoard.headers" :key="header" class="p-4 whitespace-nowrap">
+                                        {{ header }}
+                                        <span v-if="currentBoard.sortBy === header" class="ml-1 text-indigo-400">●</span>
+                                    </th>
+                                    <th class="p-4 text-center">Actions</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
-                                <tr v-for="task in activeTasks" :key="task.id" class="hover:bg-slate-50 group">
+                                <tr v-for="task in activeTasks" :key="task.id" class="hover:bg-slate-50 transition group">
                                     <td class="p-4 text-center"><input type="checkbox" :value="task.id" v-model="selectedActiveIds"></td>
-                                    <td class="p-4 font-medium text-slate-700 text-sm">{{ task.title }}</td>
-                                    <td class="p-4"><span :class="getPriorityTag(task.priority)" class="px-2 py-1 rounded-md text-[10px] font-bold uppercase">{{ getPriorityLabel(task.priority) }}</span></td>
-                                    <td class="p-4 text-right">
-                                        <button @click="archiveSingle(task.id)" class="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition">Complete & Archive</button>
+                                    
+                                    <td v-for="header in currentBoard.headers" :key="header" class="p-4 text-sm table-cell-custom">
+                                        <div v-if="isPriorityField(header)" class="flex">
+                                            <span :class="getBadgeClass(task.data[header])" class="px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition shadow-sm" contenteditable="true" @blur="updateCellValue(task, header, $event)">
+                                                {{ task.data[header] }}
+                                            </span>
+                                        </div>
+                                        <div v-else class="editable-cell outline-none text-slate-600 min-h-[1.5em]" contenteditable="true" @blur="updateCellValue(task, header, $event)">
+                                            {{ task.data[header] }}
+                                        </div>
+                                    </td>
+
+                                    <td class="p-4 text-center flex justify-center gap-2 items-center">
+                                        <button @click="archiveSingle(task.id)" class="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg font-bold text-[10px] hover:bg-emerald-100 transition shadow-sm border border-emerald-100" title="Complete task">Done</button>
+                                        <button @click="deletePermanent(task.id)" class="text-red-400 hover:text-red-600 p-1.5 transition" title="Delete task permanently">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        </button>
                                     </td>
                                 </tr>
                                 <tr v-if="activeTasks.length === 0">
-                                    <td colspan="4" class="p-10 text-center text-slate-400 italic font-light text-sm">No active tasks. Take a coffee break!</td>
+                                    <td :colspan="currentBoard.headers.length + 2" class="p-12 text-center text-slate-300 italic text-sm">No active tasks. Start adding some!</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </section>
 
-                <section class="opacity-80">
+                <section v-if="archivedTasks.length > 0" class="opacity-80">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-bold text-slate-500 flex items-center gap-2">
-                            Archive / History 
-                            <span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-md text-sm">{{ archivedTasks.length }}</span>
-                        </h2>
+                        <h2 class="text-xl font-bold text-slate-400 uppercase text-xs tracking-widest">History / Archive</h2>
                         <div v-show="selectedArchivedIds.length > 0" class="flex gap-2">
                             <button @click="batchRestore" class="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-100">Restore Selected</button>
-                            <button @click="batchDelete('archived')" class="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100">Purge Selected</button>
+                            <button @click="batchDelete('archived')" class="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100">Delete Permanently</button>
                         </div>
                     </div>
-
                     <div class="bg-slate-100 rounded-2xl border border-dashed border-slate-300 overflow-hidden">
-                        <table class="w-full text-left">
+                        <table class="w-full text-left text-xs">
                             <tbody class="divide-y divide-slate-200">
                                 <tr v-for="task in archivedTasks" :key="task.id" class="group hover:bg-slate-200 transition">
-                                    <td class="p-4 w-10 text-center"><input type="checkbox" :value="task.id" v-model="selectedArchivedIds"></td>
-                                    <td class="p-4">
-                                        <p class="line-through text-slate-400 font-medium text-sm">{{ task.title }}</p>
-                                        <span class="text-[10px] text-slate-400 uppercase">Completed: {{ task.completedAt }}</span>
+                                    <td class="p-4 w-12 text-center">
+                                        <input type="checkbox" :value="task.id" v-model="selectedArchivedIds" class="w-4 h-4 rounded opacity-50">
                                     </td>
-                                    <td class="p-4 text-right">
-                                        <button @click="restoreSingle(task.id)" class="text-[11px] font-bold text-indigo-500 opacity-0 group-hover:opacity-100 transition mr-4">Restore</button>
-                                        <button @click="deletePermanent(task.id)" class="text-[11px] font-bold text-red-400 opacity-0 group-hover:opacity-100 transition">Delete</button>
+                                    <td class="p-4 text-slate-400 italic line-through table-cell-custom">
+                                        {{ task.data[currentBoard.headers[0]] || 'Untitled Task' }}
                                     </td>
-                                </tr>
-                                <tr v-if="archivedTasks.length === 0">
-                                    <td colspan="3" class="p-8 text-center text-slate-400 italic text-sm">Archive is empty.</td>
+                                    <td class="p-4 text-right flex justify-end gap-3 items-center">
+                                        <button @click="restoreSingle(task.id)" class="text-indigo-500 font-bold opacity-0 group-hover:opacity-100 transition" title="Restore task to active list">Restore</button>
+                                        <button @click="deletePermanent(task.id)" class="text-red-400 hover:text-red-600 transition" title="Delete permanently">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        </button>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </section>
-                
-                <div class="text-center pt-10">
-                    <button @click="resetEverything" class="text-xs text-red-300 hover:text-red-500 underline transition">Wipe All Data & Reset</button>
-                </div>
 
+                <div class="text-center pt-10">
+                    <button @click="resetEverything" class="text-[10px] text-slate-300 hover:text-red-400 uppercase tracking-widest transition">Wipe Local Storage</button>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
         const { createApp, ref, computed, watch, onMounted } = Vue;
-        
-        const STORAGE_KEY = 'TEAM_BACKLOG_STORAGE_V1';
+        const STORAGE_KEY = 'SYNC_PRO_WORKSPACE_V8_FIXED';
+
+        // Robust CSV Parser
+        const parseCSVLine = (text) => {
+            const result = [];
+            let cell = '';
+            let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                let char = text[i];
+                if (char === '"') inQuotes = !inQuotes;
+                else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; }
+                else cell += char;
+            }
+            result.push(cell.trim());
+            return result.map(v => v.replace(/^"|"$/g, ''));
+        };
 
         createApp({
             setup() {
-                // Initial Data
-                const boards = ref([
-                    { id: 1, name: 'Main Project', tasks: [] }
-                ]);
-                const activeBoardIndex = ref(0);
+                const defaultHeaders = ['Task Name', 'Priority', 'Assigned To'];
+                const boards = ref([{ 
+                    id: 1, 
+                    name: 'Project Alpha', 
+                    headers: [...defaultHeaders], 
+                    tasks: [],
+                    sortBy: 'Priority',
+                    sortOrder: 'desc'
+                }]);
                 
-                // Form & Selection state
-                const newTask = ref({ title: '', priority: '2' });
+                const activeBoardIndex = ref(0);
+                const editingBoardIdx = ref(null);
+                const newTaskData = ref({});
                 const selectedActiveIds = ref([]);
                 const selectedArchivedIds = ref([]);
                 const allActiveSelected = ref(false);
 
-                // --- 1. LOCAL STORAGE LOGIC ---
-                // Load data on startup
-                onMounted(() => {
-                    const saved = localStorage.getItem(STORAGE_KEY);
-                    if (saved) {
-                        try {
-                            boards.value = JSON.parse(saved);
-                        } catch (e) {
-                            console.error("Failed to load storage", e);
-                        }
-                    }
-                });
-
-                // Save data whenever 'boards' changes (deep watch)
-                watch(boards, (newVal) => {
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(newVal));
-                }, { deep: true });
-
-                // --- 2. COMPUTED LISTS ---
                 const currentBoard = computed(() => boards.value[activeBoardIndex.value]);
-                
+
+                // Advanced Sorting logic
                 const activeTasks = computed(() => {
-                    if(!currentBoard.value) return [];
-                    return currentBoard.value.tasks.filter(t => !t.archived).sort((a, b) => b.priority - a.priority);
+                    if (!currentBoard.value) return [];
+                    const list = currentBoard.value.tasks.filter(t => !t.archived);
+                    const key = currentBoard.value.sortBy;
+                    const order = currentBoard.value.sortOrder === 'desc' ? -1 : 1;
+
+                    return list.sort((a, b) => {
+                        let valA = a.data[key] || '';
+                        let valB = b.data[key] || '';
+                        const numA = parseFloat(valA);
+                        const numB = parseFloat(valB);
+                        if (!isNaN(numA) && !isNaN(numB)) return (numA - numB) * order;
+                        return valA.toString().localeCompare(valB.toString()) * order;
+                    });
                 });
 
                 const archivedTasks = computed(() => {
-                    if(!currentBoard.value) return [];
-                    return currentBoard.value.tasks.filter(t => t.archived).sort((a, b) => b.id - a.id);
+                    if (!currentBoard.value) return [];
+                    return currentBoard.value.tasks.filter(t => t.archived).sort((a,b) => b.id - a.id);
+                });
+                
+                const isPriorityField = (h) => {
+                    const n = String(h).toLowerCase();
+                    return n.includes('priority') || n.includes('urgency') || n.includes('effort') || n.includes('status');
+                };
+
+                const initForm = () => {
+                    const data = {};
+                    currentBoard.value?.headers.forEach(h => {
+                        data[h] = isPriorityField(h) ? 'Medium' : '';
+                    });
+                    newTaskData.value = data;
+                };
+
+                onMounted(() => {
+                    const saved = localStorage.getItem(STORAGE_KEY);
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        parsed.forEach(b => {
+                            if (!b.sortBy) b.sortBy = b.headers[0];
+                            if (!b.sortOrder) b.sortOrder = 'desc';
+                        });
+                        boards.value = parsed;
+                    }
+                    initForm();
                 });
 
-                // --- 3. METHODS ---
-                const createNewBoard = () => {
-                    const name = prompt("New Board Name:");
-                    if (name) {
-                        boards.value.push({ id: Date.now(), name, tasks: [] });
-                        activeBoardIndex.value = boards.value.length - 1;
-                    }
+                watch(boards, (v) => localStorage.setItem(STORAGE_KEY, JSON.stringify(v)), { deep: true });
+                watch(activeBoardIndex, () => {
+                    initForm();
+                    selectedActiveIds.value = [];
+                    selectedArchivedIds.value = [];
+                });
+
+                const handleFileUpload = (event) => {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
+                        if (lines.length === 0) return;
+                        const headers = parseCSVLine(lines[0]);
+                        currentBoard.value.headers = headers;
+                        currentBoard.value.sortBy = headers.find(h => isPriorityField(h)) || headers[0];
+                        currentBoard.value.tasks = lines.slice(1).map((line, i) => {
+                            const values = parseCSVLine(line);
+                            let data = {};
+                            headers.forEach((h, idx) => data[h] = values[idx] || "");
+                            return { id: Date.now() + i, data, archived: false };
+                        });
+                        initForm();
+                        event.target.value = '';
+                    };
+                    reader.readAsText(file);
+                };
+
+                const exportToCSV = () => {
+                    if (!currentBoard.value || currentBoard.value.tasks.length === 0) return;
+                    const h = currentBoard.value.headers;
+                    const content = [h.join(','), ...currentBoard.value.tasks.map(t => h.map(key => `"${(t.data[key] || '').toString().replace(/"/g, '""')}"`).join(','))].join('\n');
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8;' }));
+                    link.download = `${currentBoard.value.name}_Tasks.csv`;
+                    link.click();
                 };
 
                 const addTask = () => {
-                    if (!newTask.value.title) return;
-                    currentBoard.value.tasks.push({
-                        id: Date.now(),
-                        title: newTask.value.title,
-                        priority: parseInt(newTask.value.priority),
-                        archived: false,
-                        completedAt: null
-                    });
-                    newTask.value.title = '';
+                    const first = currentBoard.value.headers[0];
+                    if(!newTaskData.value[first]) return alert(`Field "${first}" is required`);
+                    currentBoard.value.tasks.push({ id: Date.now(), data: {...newTaskData.value}, archived: false });
+                    initForm();
                 };
 
-                const archiveSingle = (id) => {
-                    const task = currentBoard.value.tasks.find(t => t.id === id);
-                    if (task) {
-                        task.archived = true;
-                        task.completedAt = new Date().toLocaleString();
+                const updateCellValue = (task, header, e) => { task.data[header] = e.target.innerText.trim(); };
+                
+                const createNewBoard = () => {
+                    const name = prompt("Board Name:");
+                    if(name) { 
+                        boards.value.push({ 
+                            id: Date.now(), name, headers: [...defaultHeaders], tasks: [], sortBy: 'Priority', sortOrder: 'desc'
+                        }); 
+                        activeBoardIndex.value = boards.value.length - 1; 
                     }
                 };
 
-                const restoreSingle = (id) => {
-                    const task = currentBoard.value.tasks.find(t => t.id === id);
-                    if (task) {
-                        task.archived = false;
-                        task.completedAt = null;
-                    }
+                const archiveSingle = (id) => { 
+                    const t = currentBoard.value.tasks.find(x => x.id === id); 
+                    if(t) t.archived = true; 
                 };
 
-                const deletePermanent = (id) => {
-                    currentBoard.value.tasks = currentBoard.value.tasks.filter(t => t.id !== id);
+                const restoreSingle = (id) => { 
+                    const t = currentBoard.value.tasks.find(x => x.id === id); 
+                    if(t) t.archived = false; 
                 };
 
-                const toggleSelect = (type) => {
-                    if (type === 'active') {
-                        selectedActiveIds.value = allActiveSelected.value ? activeTasks.value.map(t => t.id) : [];
-                    }
+                const deletePermanent = (id) => { 
+                    if(confirm("Permanently delete this task?"))
+                    currentBoard.value.tasks = currentBoard.value.tasks.filter(t => t.id !== id); 
                 };
 
-                const batchArchive = () => {
-                    selectedActiveIds.value.forEach(id => archiveSingle(id));
-                    selectedActiveIds.value = [];
-                    allActiveSelected.value = false;
+                const toggleSelect = (type) => { 
+                    if(type === 'active') selectedActiveIds.value = allActiveSelected.value ? activeTasks.value.map(t => t.id) : []; 
+                };
+
+                const batchArchive = () => { 
+                    selectedActiveIds.value.forEach(id => archiveSingle(id)); 
+                    selectedActiveIds.value = []; 
+                    allActiveSelected.value = false; 
                 };
 
                 const batchRestore = () => {
@@ -238,45 +352,29 @@
                 };
 
                 const batchDelete = (type) => {
-                    const idsToDelete = type === 'active' ? selectedActiveIds.value : selectedArchivedIds.value;
-                    if (confirm(`Permanently delete ${idsToDelete.length} tasks from ${type}?`)) {
-                        currentBoard.value.tasks = currentBoard.value.tasks.filter(t => !idsToDelete.includes(t.id));
-                        if (type === 'active') {
-                            selectedActiveIds.value = [];
-                            allActiveSelected.value = false;
-                        } else {
-                            selectedArchivedIds.value = [];
-                        }
+                    const list = type === 'active' ? selectedActiveIds : selectedArchivedIds;
+                    if(confirm(`Delete ${list.value.length} items permanently?`)) {
+                        currentBoard.value.tasks = currentBoard.value.tasks.filter(x => !list.value.includes(x.id));
+                        list.value = [];
+                        if(type === 'active') allActiveSelected.value = false;
                     }
                 };
 
-                const resetEverything = () => {
-                    if(confirm("DANGER: This will wipe all your boards and tasks. Proceed?")) {
-                        localStorage.removeItem(STORAGE_KEY);
-                        location.reload();
-                    }
+                const resetEverything = () => { if(confirm("Clear all data?")) { localStorage.removeItem(STORAGE_KEY); location.reload(); }};
+                
+                const getBadgeClass = (v) => {
+                    const s = String(v).toLowerCase();
+                    if(s.includes('3') || s.includes('high') || s.includes('urgent')) return 'bg-red-100 text-red-600 border border-red-200';
+                    if(s.includes('2') || s.includes('medium')) return 'bg-orange-100 text-orange-600 border border-orange-200';
+                    return 'bg-blue-100 text-blue-600 border border-blue-200';
                 };
-
-                const getPriorityLabel = (p) => ['Low', 'Med', 'High'][p - 1];
-                const getPriorityTag = (p) => {
-                    if (p === 3) return 'bg-red-100 text-red-600';
-                    if (p === 2) return 'bg-orange-100 text-orange-600';
-                    return 'bg-blue-100 text-blue-600';
-                };
-
-                // Watch board index to reset checkbox state
-                watch(activeBoardIndex, () => {
-                    selectedActiveIds.value = [];
-                    selectedArchivedIds.value = [];
-                    allActiveSelected.value = false;
-                });
 
                 return { 
-                    boards, activeBoardIndex, currentBoard, newTask, activeTasks, archivedTasks,
-                    selectedActiveIds, selectedArchivedIds, allActiveSelected,
-                    createNewBoard, addTask, archiveSingle, restoreSingle, deletePermanent,
-                    toggleSelect, batchArchive, batchRestore, batchDelete, resetEverything,
-                    getPriorityLabel, getPriorityTag 
+                    boards, activeBoardIndex, editingBoardIdx, currentBoard, newTaskData, activeTasks, archivedTasks, 
+                    selectedActiveIds, selectedArchivedIds, allActiveSelected, addTask, createNewBoard, 
+                    deleteBoard: (idx) => { if(confirm("Delete this board?")) boards.value.splice(idx,1) }, 
+                    archiveSingle, restoreSingle, deletePermanent, toggleSelect, batchArchive, batchRestore, batchDelete, 
+                    handleFileUpload, exportToCSV, updateCellValue, getBadgeClass, isPriorityField, resetEverything 
                 };
             }
         }).mount('#app');
